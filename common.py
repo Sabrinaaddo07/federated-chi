@@ -106,3 +106,24 @@ def load_client_data(cid, num_clients):
     )
 
     return X_train, X_test, y_train, y_test
+
+
+# ---------------------------------------------------------------------------
+# 4. Server test data
+# ---------------------------------------------------------------------------
+
+def load_server_test_data():
+    """
+    Return a held-out test set from the full digits dataset.
+
+    The server uses this to evaluate the global model each round.
+    No client ever trains on this data, so it gives an unbiased
+    accuracy estimate.
+    """
+    digits = load_digits()
+    X = digits.data.astype(np.float32) / 16.0
+    y = digits.target
+    _, X_test, _, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42,
+    )
+    return X_test, y_test
