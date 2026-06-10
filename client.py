@@ -43,10 +43,11 @@ class DigitClient(fl.client.NumPyClient):
       evaluate()         — how accurate are you on your local test set?
     """
 
-    def __init__(self, cid):
+    def __init__(self, cid, num_clients):
         # Load *only* this client's slice of the data.
+        self.cid = cid
         self.X_train, self.X_test, self.y_train, self.y_test = \
-            load_client_data(cid, num_clients=2)
+            load_client_data(cid, num_clients=num_clients)
 
         self.model = create_model()
 
@@ -111,13 +112,15 @@ class DigitClient(fl.client.NumPyClient):
         self.set_parameters(parameters)
         accuracy = self.model.score(self.X_test, self.y_test)
         # Use 1 - accuracy as a made-up "loss" (we only care about accuracy)
-        return 1.0 - accuracy, len(self.X_test), {"accuracy": accuracy}
+        return 1.0 - accuracy, len(self.X_test), {"accuracy": accuracy, "cid": self.cid}
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--cid", type=int, required=True,
-                        help="Client ID (0 or 1 for this demo)")
+                        help="Client ID (e.g. 0, 1, 2, ...)")
+    parser.add_argument("--num_clients", type=int, default=10,
+                        help="Total number of clients splitting the data")
     args = parser.parse_args()
 
     print(f"--- Client {args.cid} starting ---")
@@ -126,7 +129,7 @@ def main():
     # The server decides when to train, not the client.
     fl.client.start_numpy_client(
         server_address="127.0.0.1:8080",
-        client=DigitClient(args.cid),
+        client=DigitClient(args.cid, args.num_clients),
     )
 
 
