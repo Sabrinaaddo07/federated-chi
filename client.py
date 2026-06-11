@@ -102,7 +102,7 @@ class DigitClient(fl.client.NumPyClient):
         # Step 3 — send the new weights back
         # Also send len(X_train) so the server knows how important we are
         # (clients with more data get more say in the average).
-        return self.get_parameters(config), len(self.X_train), {}
+        return self.get_parameters(config), len(self.X_train), {"cid": self.cid}
 
     def evaluate(self, parameters, config):
         """
