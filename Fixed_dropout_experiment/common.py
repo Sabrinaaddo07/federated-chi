@@ -212,3 +212,33 @@ def load_server_test_data():
         X, y, test_size=0.2, random_state=42,
     )
     return X_test, y_test
+
+
+# ---------------------------------------------------------------------------
+# 7. Class-map-based data loading (for poisoning experiments)
+# ---------------------------------------------------------------------------
+
+POISON_CLASS_MAPS = {
+    "single": {i: [i] for i in range(7)} | {7: [8]},
+    "multi": {7: [1, 2, 3], 0: [0], 1: [4], 2: [5], 3: [6], 4: [7], 5: [8], 6: [9]},
+}
+
+
+def load_client_data_from_class_map(cid, class_map):
+    """
+    Load data for a client given a class map dict.
+    class_map: dict mapping cid -> list of digit classes
+    """
+    X, y = load_digits(return_X_y=True)
+    X = X.astype(np.float64) / 16.0
+
+    classes = class_map[cid]
+    mask = np.zeros(len(y), dtype=bool)
+    for c in classes:
+        mask |= (y == c)
+    X_client, y_client = X[mask], y[mask]
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_client, y_client, test_size=0.2, random_state=42,
+    )
+    return X_train, X_test, y_train, y_test
