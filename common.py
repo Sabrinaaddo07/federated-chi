@@ -8,7 +8,7 @@ What this is for:
 - Both server.py and client.py import from here
 """
 
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.datasets import load_digits
 from sklearn.model_selection import train_test_split
 import numpy as np
@@ -20,18 +20,37 @@ import numpy as np
 
 def create_model():
     """
-    Returns a fresh Logistic Regression model.
+    Returns a fresh Logistic Regression model (batch L-BFGS solver).
 
     Federated learning note:
     - max_iter=1: each time we call .fit(), it does only 1 epoch of training.
       That way we can do many rounds where each round = 1 local epoch.
     - warm_start=True: keeps the existing weights instead of resetting them
       every time. This lets the model keep improving round after round.
+
+    NOTE: This model requires at least 2 classes in the training data.
+    Use create_sgd_model() for single-class-per-client scenarios.
     """
     return LogisticRegression(
         max_iter=1,
         warm_start=True,
         solver="lbfgs",
+    )
+
+
+def create_sgd_model():
+    """
+    Returns a fresh SGD-based Logistic Regression model (online solver).
+
+    Unlike create_model(), this uses stochastic gradient descent and
+    supports training on data with only 1 class.
+    Use with model.partial_fit(X, y, classes=np.arange(10)).
+
+    Compatible with the same get_parameters / set_parameters helpers.
+    """
+    return SGDClassifier(
+        loss="log_loss",
+        warm_start=True,
     )
 
 
@@ -70,7 +89,73 @@ def set_parameters(model, parameters):
 
 
 # ---------------------------------------------------------------------------
-# 3. Data loading
+# 3. IID data loading — each client gets a balanced mix of all classes
+# ---------------------------------------------------------------------------
+
+def load_client_data_iid(cid, num_clients):
+    """
+    IID split: randomly shuffle all samples, assign round-robin to clients.
+    Every client gets roughly the same number of samples from every digit class.
+
+    Returns: (X_train, X_test, y_train, y_test)
+    """
+    X, y = load_digits(return_X_y=True)
+    X = X.astype(np.float64) / 16.0
+
+    rng = np.random.RandomState(seed=42)
+    indices = rng.permutation(len(X))
+    X, y = X[indices], y[indices]
+
+    mask = np.arange(len(X)) % num_clients == cid
+    X_client, y_client = X[mask], y[mask]
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_client, y_client, test_size=0.2, random_state=42,
+    )
+    return X_train, X_test, y_train, y_test
+
+
+# ---------------------------------------------------------------------------
+# 4. Non-IID data loading — each client gets exclusive digit classes
+# ---------------------------------------------------------------------------
+
+def load_client_data_non_iid(cid, num_clients, scheme="a"):
+    """
+    Non-IID split: assign each client data from only 1-2 digit classes.
+
+    Scheme "a": 8 clients, classes 0-7 only (classes 8,9 held out).
+      Client cid → digit class cid exclusively.
+
+    Scheme "b": 8 clients, all 10 classes covered.
+      Clients 0-6 → digit class cid exclusively.
+      Client 7   → digit classes 7, 8, 9 (3× the data).
+
+    Returns: (X_train, X_test, y_train, y_test)
+    """
+    X, y = load_digits(return_X_y=True)
+    X = X.astype(np.float64) / 16.0
+
+    if scheme == "a":
+        mask = y == cid
+        X_client, y_client = X[mask], y[mask]
+    elif scheme == "b":
+        if cid < 7:
+            mask = y == cid
+            X_client, y_client = X[mask], y[mask]
+        else:
+            mask = (y == 7) | (y == 8) | (y == 9)
+            X_client, y_client = X[mask], y[mask]
+    else:
+        raise ValueError(f"Unknown scheme: {scheme}")
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_client, y_client, test_size=0.2, random_state=42,
+    )
+    return X_train, X_test, y_train, y_test
+
+
+# ---------------------------------------------------------------------------
+# 5. Data loading (original contiguous split — kept for backward compat)
 # ---------------------------------------------------------------------------
 
 def load_client_data(cid, num_clients):
@@ -109,7 +194,7 @@ def load_client_data(cid, num_clients):
 
 
 # ---------------------------------------------------------------------------
-# 4. Server test data
+# 6. Server test data (unchanged — always uses full dataset)
 # ---------------------------------------------------------------------------
 
 def load_server_test_data():
