@@ -1,2 +1,4 @@
 __pycache__/
 .DS_Store
+results_poison_*.csv
+poison_*.png

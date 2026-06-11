@@ -1,3 +1,4 @@
 flwr
 scikit-learn
 numpy
+matplotlib
