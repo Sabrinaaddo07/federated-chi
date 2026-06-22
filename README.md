@@ -6,10 +6,22 @@ Exploring federated learning on Chameleon using Flower + scikit-learn.
 
 ## Quick start (basic demo)
 
+### Setup (local or remote host)
+
 ```bash
+# Create and activate a virtual environment (required on Debian/Ubuntu remote hosts)
+python3 -m venv .venv
+source .venv/bin/activate
+
 # Install dependencies
 pip install -r requirements.txt
+```
 
+### Run
+
+On the remote host, prefix commands with the venv path or re-activate the virtual environment first.
+
+```bash
 # Terminal 1: start server
 python3 server.py
 
