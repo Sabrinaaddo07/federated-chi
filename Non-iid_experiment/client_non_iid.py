@@ -1,10 +1,9 @@
 """
-client_non_iid.py - Flower client for non-IID / IID data split experiments.
+client_non_iid.py - Flower client for IID vs non-IID data split experiments.
 
 Usage:
   python3 client_non_iid.py --cid 0 --scheme iid
-  python3 client_non_iid.py --cid 0 --scheme a
-  python3 client_non_iid.py --cid 0 --scheme b
+  python3 client_non_iid.py --cid 0 --scheme non_iid
 """
 
 import argparse
@@ -41,14 +40,14 @@ class DigitClient(fl.client.NumPyClient):
                 load_client_data_iid(cid, num_clients=num_clients)
         else:
             self.X_train, self.X_test, self.y_train, self.y_test = \
-                load_client_data_non_iid(cid, num_clients=num_clients, scheme=scheme)
+                load_client_data_non_iid(cid, num_clients=num_clients)
 
         self.model = create_sgd_model()
         self.all_classes = np.arange(10)
 
         if scheme != "iid":
             classes_present = sorted(set(self.y_train))
-            print(f"  Client {cid} (scheme {scheme}) — {len(self.X_train)} train, "
+            print(f"  Client {cid} (non-IID) — {len(self.X_train)} train, "
                   f"{len(self.X_test)} test samples | classes: {classes_present}")
         else:
             print(f"  Client {cid} (IID) — {len(self.X_train)} train, "
@@ -74,23 +73,21 @@ class DigitClient(fl.client.NumPyClient):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Flower client for non-IID data split experiment."
+        description="Flower client for IID vs non-IID data split experiment."
     )
     parser.add_argument("--cid", type=int, required=True,
                         help="Client ID (0, 1, 2, ..., 7)")
     parser.add_argument("--num_clients", type=int, default=8,
                         help="Total number of clients")
     parser.add_argument("--scheme", type=str, default="iid",
-                        choices=["iid", "a", "b"],
-                        help="Data split scheme: iid (balanced), a (1 class/client, "
-                             "classes 0-7 only), b (1 class/client but client 7 "
-                             "gets classes 7-9)")
+                        choices=["iid", "non_iid"],
+                        help="Data split: iid (balanced) or non_iid "
+                             "(1 dominant class + shared 8/9 per client)")
     args = parser.parse_args()
 
     scheme_names = {
         "iid": "IID (balanced across all 10 classes)",
-        "a": "Non-IID A (1 digit class per client, classes 8-9 held out)",
-        "b": "Non-IID B (1 class/client except client 7 gets classes 7,8,9)",
+        "non_iid": "Non-IID (1 dominant class + shared classes 8/9 per client)",
     }
     print(f"--- Client {args.cid} starting [{scheme_names[args.scheme]}] ---")
 

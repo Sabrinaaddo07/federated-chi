@@ -1,15 +1,11 @@
 """
 server_poison.py - Server for label-flipping poisoning experiments.
 
-Logs results to results_poison_{scheme}.csv with per-round metrics including:
-  - global accuracy and per-class accuracy
-  - malicious vs honest local accuracy (for detectability)
-  - malicious vs honest update norms (for norm-based detection)
-
 Usage:
-  python3 server_poison.py --scheme iid
-  python3 server_poison.py --scheme single
-  python3 server_poison.py --scheme multi
+  python3 server_poison.py --baseline
+  python3 server_poison.py --mode uniform
+  python3 server_poison.py --mode early_only
+  python3 server_poison.py --mode late_only
 """
 
 import argparse
@@ -48,8 +44,8 @@ class PoisonFedAvg(Strategy):
     def __init__(
         self,
         initial_parameters: Parameters,
-        scheme: str = "iid",
-        malicious_cid: int = 7,
+        mode: str = "baseline",
+        num_malicious: int = 3,
         num_rounds: int = 40,
         seed: int = 42,
         fraction_fit: float = 1.0,
@@ -59,8 +55,7 @@ class PoisonFedAvg(Strategy):
         min_evaluate_clients: int = 1,
     ):
         self.initial_parameters = initial_parameters
-        self.scheme = scheme
-        self.malicious_cid = str(malicious_cid)
+        self.mode = mode
         self.num_rounds = num_rounds
         self.fraction_fit = fraction_fit
         self.min_fit_clients = min_fit_clients
@@ -70,14 +65,43 @@ class PoisonFedAvg(Strategy):
         self.global_model = None
         self.num_available = 0
 
-        # Randomly select ~half the rounds for poisoning
-        rng = np.random.RandomState(seed=seed)
-        n_poison = num_rounds // 2
-        self.poison_rounds = set(
-            rng.choice(range(1, num_rounds + 1), size=n_poison, replace=False)
+        # Malicious CIDs: last N clients (e.g. 5,6,7 for num_malicious=3)
+        self.malicious_cids = set(
+            str(c) for c in range(8 - num_malicious, 8)
         )
-        print(f"  Poison rounds ({len(self.poison_rounds)} of {num_rounds}): "
-              f"{sorted(self.poison_rounds)}")
+
+        rng = np.random.RandomState(seed=seed)
+
+        if mode == "baseline":
+            self.poison_rounds = set()
+        elif mode == "uniform":
+            n_poison = num_rounds // 2
+            self.poison_rounds = set(
+                rng.choice(range(1, num_rounds + 1), size=n_poison, replace=False)
+            )
+        elif mode == "early_only":
+            first_half = list(range(1, 21))
+            n_poison = 10
+            self.poison_rounds = set(
+                rng.choice(first_half, size=n_poison, replace=False)
+            )
+        elif mode == "late_only":
+            second_half = list(range(21, 41))
+            n_poison = 10
+            self.poison_rounds = set(
+                rng.choice(second_half, size=n_poison, replace=False)
+            )
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
+
+        n_poison = len(self.poison_rounds)
+        if n_poison > 0:
+            print(f"  Poison rounds ({n_poison} of {num_rounds}): "
+                  f"{sorted(self.poison_rounds)}")
+        else:
+            print("  Baseline — no poisoning")
+
+        print(f"  Malicious CIDs: {sorted(self.malicious_cids)}")
 
         self.csv_file = None
         self.csv_writer = None
@@ -149,63 +173,63 @@ class PoisonFedAvg(Strategy):
             else:
                 per_class[str(digit)] = 0.0
 
-        # Collect malicious vs honest metrics from fit results
-        malicious_local_acc = None
-        honest_local_accs = []
-        malicious_update_norm = None
-        honest_update_norms = []
+        # Collect metrics: average across all malicious, then all honest
+        malicious_accs = []
+        malicious_norms = []
+        honest_accs = []
+        honest_norms = []
 
         for _, r in results:
             if r.metrics:
                 cid = r.metrics.get("cid", "?")
                 acc = r.metrics.get("accuracy", 0.0)
                 norm = r.metrics.get("update_norm", 0.0)
-                if str(cid) == self.malicious_cid:
-                    malicious_local_acc = acc
-                    malicious_update_norm = norm
+                if str(cid) in self.malicious_cids:
+                    malicious_accs.append(acc)
+                    malicious_norms.append(norm)
                 else:
-                    honest_local_accs.append(acc)
-                    honest_update_norms.append(norm)
+                    honest_accs.append(acc)
+                    honest_norms.append(norm)
 
-        honest_avg_acc = np.mean(honest_local_accs) if honest_local_accs else 0.0
-        honest_avg_norm = np.mean(honest_update_norms) if honest_update_norms else 0.0
+        avg_malicious_acc = np.mean(malicious_accs) if malicious_accs else 0.0
+        avg_malicious_norm = np.mean(malicious_norms) if malicious_norms else 0.0
+        avg_honest_acc = np.mean(honest_accs) if honest_accs else 0.0
+        avg_honest_norm = np.mean(honest_norms) if honest_norms else 0.0
 
         is_poison = server_round in self.poison_rounds
 
         print(f"\nRound {server_round} — Global acc: {global_acc:.4f}"
               f" {'[POISON]' if is_poison else ''}")
         print(f"    Participants: {len(results)} | CIDs: {sorted(participating_cids)}")
-        if malicious_local_acc is not None:
-            print(f"    Malicious local acc: {malicious_local_acc:.4f}"
-                  f" | Honest avg: {honest_avg_acc:.4f}")
-        if malicious_update_norm is not None:
-            print(f"    Malicious norm: {malicious_update_norm:.4f}"
-                  f" | Honest avg: {honest_avg_norm:.4f}")
+        print(f"    Avg malicious acc: {avg_malicious_acc:.4f} (n={len(malicious_accs)})"
+              f" | Avg honest acc: {avg_honest_acc:.4f} (n={len(honest_accs)})")
+        print(f"    Avg malicious norm: {avg_malicious_norm:.4f}"
+              f" | Avg honest norm: {avg_honest_norm:.4f}")
 
         # CSV logging
         if self.csv_writer is None:
             self.csv_file = open(
-                f"results_poison_{self.scheme}.csv",
+                f"results_poison_{self.mode}.csv",
                 "w", newline="",
             )
             self.csv_writer = csv.writer(self.csv_file)
             self.csv_writer.writerow([
-                "round", "scheme", "global_accuracy", "per_class_accuracy",
-                "is_poison_round", "malicious_cid",
-                "malicious_local_acc", "honest_avg_local_acc",
-                "malicious_update_norm", "honest_avg_update_norm",
+                "round", "mode", "global_accuracy", "per_class_accuracy",
+                "is_poison_round", "num_malicious",
+                "avg_malicious_acc", "avg_honest_acc",
+                "avg_malicious_norm", "avg_honest_norm",
             ])
         self.csv_writer.writerow([
             server_round,
-            self.scheme,
+            self.mode,
             f"{global_acc:.4f}",
             json.dumps(per_class),
             int(is_poison),
-            self.malicious_cid,
-            f"{malicious_local_acc:.4f}" if malicious_local_acc is not None else "",
-            f"{honest_avg_acc:.4f}" if honest_local_accs else "",
-            f"{malicious_update_norm:.4f}" if malicious_update_norm is not None else "",
-            f"{honest_avg_norm:.4f}" if honest_update_norms else "",
+            len(self.malicious_cids),
+            f"{avg_malicious_acc:.4f}" if malicious_accs else "",
+            f"{avg_honest_acc:.4f}" if honest_accs else "",
+            f"{avg_malicious_norm:.4f}" if malicious_norms else "",
+            f"{avg_honest_norm:.4f}" if honest_norms else "",
         ])
         self.csv_file.flush()
 
@@ -250,25 +274,40 @@ def main():
         description="Federated learning server for poisoning experiments."
     )
     parser.add_argument(
-        "--scheme", type=str, default="iid",
-        choices=["iid", "single", "multi"],
-        help="Data split scheme for the poisoning experiment",
+        "--mode", type=str, default=None,
+        choices=["uniform", "early_only", "late_only"],
+        help="Poison schedule mode",
     )
-    parser.add_argument("--malicious_cid", type=int, default=7)
+    parser.add_argument(
+        "--baseline", action="store_true",
+        help="Run clean baseline (no poisoning)",
+    )
+    parser.add_argument("--num_malicious", type=int, default=3,
+                        help="Number of malicious clients (last N CIDs)")
     parser.add_argument("--num_rounds", type=int, default=40)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
-    scheme_descriptions = {
-        "iid": "IID — all clients have balanced data from all 10 classes",
-        "single": "Non-IID — malicious gets class 8, others get classes 0-6",
-        "multi": "Non-IID — malicious gets classes 1,2,3, others get one each",
+    if args.baseline and args.mode:
+        parser.error("Cannot use both --baseline and --mode")
+    if not args.baseline and not args.mode:
+        parser.error("Must specify either --baseline or --mode")
+
+    mode = "baseline" if args.baseline else args.mode
+
+    mode_descriptions = {
+        "baseline": "Baseline — no malicious clients",
+        "uniform": "3 malicious clients poison ~20 coordinated rounds across all 40",
+        "early_only": "3 malicious clients poison ~10 rounds in 1-20, then honest in 21-40",
+        "late_only": "3 malicious clients honest in 1-20, then poison ~10 rounds in 21-40",
     }
+
+    malicious_cids_str = ",".join(str(c) for c in range(8 - args.num_malicious, 8))
 
     print("=" * 60)
     print(f"  POISON EXPERIMENT — Flower + scikit-learn")
-    print(f"  Scheme: {scheme_descriptions[args.scheme]}")
-    print(f"  Malicious cid={args.malicious_cid} | {args.num_rounds} rounds")
+    print(f"  Mode: {mode_descriptions[mode]}")
+    print(f"  Malicious CIDs: {{{malicious_cids_str}}} | {args.num_rounds} rounds")
     print("=" * 60)
     print()
 
@@ -278,8 +317,8 @@ def main():
 
     strategy = PoisonFedAvg(
         initial_parameters=initial_parameters,
-        scheme=args.scheme,
-        malicious_cid=args.malicious_cid,
+        mode=mode,
+        num_malicious=args.num_malicious,
         num_rounds=args.num_rounds,
         seed=args.seed,
         min_available_clients=8,
@@ -287,8 +326,12 @@ def main():
 
     print("  Start 8 clients (all before round 1):")
     for i in range(8):
-        mal = " --malicious" if i == args.malicious_cid else ""
-        print(f"    python3 client_poison.py --cid {i} --scheme {args.scheme}{mal}")
+        if args.baseline:
+            mal = ""
+        else:
+            is_mal = i >= 8 - args.num_malicious
+            mal = " --malicious" if is_mal else ""
+        print(f"    python3 client_poison.py --cid {i}{mal}")
     print()
     print("  Server listening on 127.0.0.1:8080")
     print()

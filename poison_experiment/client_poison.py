@@ -1,9 +1,11 @@
 """
 client_poison.py - Flower client with optional label-flipping poisoning.
 
+All clients use IID data. Use --malicious to mark this client as the attacker.
+
 Usage:
-  python3 client_poison.py --cid 0 --scheme iid
-  python3 client_poison.py --cid 7 --scheme iid --malicious
+  python3 client_poison.py --cid 0
+  python3 client_poison.py --cid 7 --malicious
 """
 
 import argparse
@@ -20,8 +22,6 @@ from common import (
     get_parameters,
     set_parameters,
     load_client_data_iid,
-    load_client_data_from_class_map,
-    POISON_CLASS_MAPS,
 )
 
 flwr_logger = logging.getLogger("flwr")
@@ -32,25 +32,19 @@ for h in flwr_logger.handlers:
 
 class PoisonClient(fl.client.NumPyClient):
 
-    def __init__(self, cid, num_clients, scheme, malicious):
+    def __init__(self, cid, num_clients, malicious):
         self.cid = cid
-        self.scheme = scheme
         self.malicious = malicious
         self.all_classes = np.arange(10)
 
-        if scheme == "iid":
-            self.X_train, self.X_test, self.y_train, self.y_test = \
-                load_client_data_iid(cid, num_clients=num_clients)
-        else:
-            class_map = POISON_CLASS_MAPS[scheme]
-            self.X_train, self.X_test, self.y_train, self.y_test = \
-                load_client_data_from_class_map(cid, class_map)
+        self.X_train, self.X_test, self.y_train, self.y_test = \
+            load_client_data_iid(cid, num_clients=num_clients)
 
         self.model = create_sgd_model()
 
         classes_present = sorted(set(self.y_train))
         mal_str = " [MALICIOUS]" if malicious else ""
-        print(f"  Client {cid}{mal_str} ({scheme}) — {len(self.X_train)} train, "
+        print(f"  Client {cid}{mal_str} — {len(self.X_train)} train, "
               f"{len(self.X_test)} test samples | classes: {classes_present}")
 
     def get_parameters(self, config):
@@ -102,19 +96,16 @@ def main():
     )
     parser.add_argument("--cid", type=int, required=True)
     parser.add_argument("--num_clients", type=int, default=8)
-    parser.add_argument(
-        "--scheme", type=str, default="iid", choices=["iid", "single", "multi"]
-    )
     parser.add_argument("--malicious", action="store_true",
                         help="Mark this client as malicious")
     args = parser.parse_args()
 
     role = "MALICIOUS" if args.malicious else "honest"
-    print(f"--- Client {args.cid} [{role}] scheme={args.scheme} ---")
+    print(f"--- Client {args.cid} [{role}] ---")
 
     fl.client.start_numpy_client(
         server_address="127.0.0.1:8080",
-        client=PoisonClient(args.cid, args.num_clients, args.scheme, args.malicious),
+        client=PoisonClient(args.cid, args.num_clients, args.malicious),
     )
 
 

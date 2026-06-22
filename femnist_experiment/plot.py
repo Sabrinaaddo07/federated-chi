@@ -1,9 +1,8 @@
 """
-plot_non_iid.py - Read results_non_iid_iid.csv and results_non_iid_non_iid.csv,
-                  plot accuracy curves, and print a summary table.
+plot.py - Read FEMNIST experiment results and plot accuracy curves.
 
-Usage:  python3 plot_non_iid.py
-Output: non_iid_experiment.png + printed table
+Usage:  python3 plot.py
+Output: femnist_experiment.png + printed metrics table
 """
 
 import csv
@@ -32,14 +31,14 @@ def get_int(row, key):
 
 
 def main():
-    files = sorted(glob.glob("results_non_iid_*.csv"))
+    files = sorted(glob.glob("results_femnist_*.csv"))
     if not files:
-        print("No results_non_iid_*.csv files found in current directory.")
+        print("No results_femnist_*.csv files found in current directory.")
         sys.exit(1)
 
     scheme_labels = {
-        "iid": "IID (balanced, all 10 classes)",
-        "non_iid": "Non-IID (1 dominant class + shared 8/9 per client)",
+        "iid": "IID (shuffled, round-robin)",
+        "non_iid": f"Non-IID (Dirichlet)",
     }
     colors = {"iid": "#2e86ab", "non_iid": "#d9534f"}
     markers = {"iid": "o", "non_iid": "s"}
@@ -50,7 +49,7 @@ def main():
 
     for f in files:
         rows = load_csv(f)
-        scheme = f.replace("results_non_iid_", "").replace(".csv", "")
+        scheme = f.replace("results_femnist_", "").replace(".csv", "")
 
         rounds = [get_int(r, "round") for r in rows]
         accs = [get_float(r, "global_accuracy") for r in rows]
@@ -68,44 +67,44 @@ def main():
 
     plt.xlabel("Round", fontsize=13)
     plt.ylabel("Global Test Accuracy", fontsize=13)
-    plt.title("Federated Learning — IID vs Non-IID Data Split",
+    plt.title("Federated Learning on EMNIST — IID vs Non-IID (sklearn MLP)",
               fontsize=14, fontweight="bold")
     plt.legend(fontsize=11)
     plt.grid(True, alpha=0.3)
     plt.ylim(0, 1)
     plt.tight_layout()
-    plt.savefig("non_iid_experiment.png", dpi=150)
-    print("Saved to non_iid_experiment.png")
+    plt.savefig("femnist_experiment.png", dpi=150)
+    print("Saved to femnist_experiment.png")
     print()
 
-    # ── Metrics table ──
+    # Metrics table
     header_order = sorted(all_data.keys())
 
-    print("─" * 80)
-    print(f"{'Metric':<35}", end="")
+    print("=" * 70)
+    print(f"{'Metric':<40}", end="")
     for s in header_order:
         print(f"{scheme_labels.get(s, s):<25}", end="")
     print()
-    print("─" * 80)
+    print("=" * 70)
 
-    # Row 1: Final accuracy
-    print(f"{'Final accuracy (round 40)':<35}", end="")
+    final_accs = {}
     for s in header_order:
         d = all_data[s]
-        final = d["accs"][-1]
-        print(f"{final:<25.4f}", end="")
+        final_accs[s] = d["accs"][-1]
+
+    print(f"{'Final accuracy (round ' + str(d['rounds'][-1]) + ')':<40}", end="")
+    for s in header_order:
+        print(f"{final_accs[s]:<25.4f}", end="")
     print()
 
-    # Row 2: Rounds to reach 85%
-    print(f"{'Rounds to >= 85%':<35}", end="")
+    print(f"{'Rounds to >= 70%':<40}", end="")
     for s in header_order:
         d = all_data[s]
-        r2conv = next((r for r, a in zip(d["rounds"], d["accs"]) if a >= 0.85), "-")
+        r2conv = next((r for r, a in zip(d["rounds"], d["accs"]) if a >= 0.70), "-")
         print(f"{str(r2conv):<25}", end="")
     print()
 
-    # Row 3: Accuracy variance (last 10 rounds)
-    print(f"{'Accuracy variance (r31–40)':<35}", end="")
+    print(f"{'Accuracy variance (last 10 rounds)':<40}", end="")
     for s in header_order:
         d = all_data[s]
         last10 = d["accs"][-10:]
@@ -113,17 +112,16 @@ def main():
         print(f"{var:<25.4f}", end="")
     print()
 
-    # Row 4: Gap vs IID baseline
-    if "iid" in all_data:
-        baseline_final = all_data["iid"]["accs"][-1]
-        print(f"{'Gap vs IID baseline (final acc)':<35}", end="")
+    if len(header_order) > 1:
+        baseline = header_order[0]
+        baseline_final = final_accs[baseline]
+        print(f"{'Gap vs ' + baseline + ' baseline':<40}", end="")
         for s in header_order:
-            d = all_data[s]
-            gap = d["accs"][-1] - baseline_final
+            gap = final_accs[s] - baseline_final
             sign = "+" if gap >= 0 else ""
             print(f"{sign}{gap:<24.4f}", end="")
         print()
-    print("─" * 80)
+    print("=" * 70)
 
 
 if __name__ == "__main__":

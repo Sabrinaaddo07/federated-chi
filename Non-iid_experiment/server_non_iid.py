@@ -1,13 +1,12 @@
 """
-server_non_iid.py - Flower server for non-IID / IID data split experiments.
+server_non_iid.py - Flower server for IID vs non-IID data split experiments.
 
 No dropout — all 8 clients participate every round.
 Results are logged to results_non_iid_{scheme}.csv
 
 Usage:
   python3 server_non_iid.py --scheme iid
-  python3 server_non_iid.py --scheme a
-  python3 server_non_iid.py --scheme b
+  python3 server_non_iid.py --scheme non_iid
 """
 
 import argparse
@@ -192,18 +191,16 @@ def main():
     )
     parser.add_argument(
         "--scheme", type=str, default="iid",
-        choices=["iid", "a", "b"],
-        help="Data split scheme: iid (balanced), a (1 class/client, "
-             "classes 0-7 only), b (1 class/client but client 7 "
-             "gets classes 7-9)",
+        choices=["iid", "non_iid"],
+        help="Data split: iid (balanced) or non_iid "
+             "(1 dominant class + shared 8/9 per client)",
     )
     args = parser.parse_args()
     scheme = args.scheme
 
     scheme_descriptions = {
         "iid": "IID (balanced across all 10 classes)",
-        "a": "Non-IID A (1 digit class per client, classes 8-9 held out)",
-        "b": "Non-IID B (1 class/client except client 7 gets classes 7,8,9)",
+        "non_iid": "Non-IID (1 dominant class + shared classes 8/9 per client, equal data)",
     }
 
     print("=" * 60)
