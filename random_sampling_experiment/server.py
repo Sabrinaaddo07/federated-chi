@@ -216,13 +216,13 @@ def main():
         min_available_clients=total,
     )
 
-    print(f"  Server listening on 127.0.0.1:8080")
+    print(f"  Server listening on 10.0.0.1:8080")
     print(f"  Waiting for {total} clients...")
     print()
 
     try:
         fl.server.start_server(
-            server_address="127.0.0.1:8080",
+            server_address="10.0.0.1:8080",
             config=fl.server.ServerConfig(num_rounds=40),
             strategy=strategy,
         )

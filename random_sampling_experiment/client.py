@@ -51,7 +51,7 @@ def main():
 
     print(f"--- Client {args.cid} starting ---")
     fl.client.start_numpy_client(
-        server_address="127.0.0.1:8080",
+        server_address="10.0.0.1:8080",
         client=DigitClient(args.cid, args.num_clients),
     )
 
