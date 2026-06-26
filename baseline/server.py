@@ -122,7 +122,7 @@ class BaselineFedAvg(Strategy):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--server_address", type=str, default="0.0.0.0:8080")
+    parser.add_argument("--server_address", type=str, default="10.0.0.1:8080")
     parser.add_argument("--num_clients", type=int, default=NUM_CLIENTS)
     parser.add_argument("--num_rounds", type=int, default=NUM_ROUNDS)
     args = parser.parse_args()

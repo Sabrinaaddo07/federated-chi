@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 MODE="${1:-local}"
-SERVER_ADDR="${2:-0.0.0.0:8080}"
+SERVER_ADDR="${2:-10.0.0.1:8080}"
 
 cleanup() {
     echo ""
@@ -59,7 +59,7 @@ elif [ "$MODE" = "chameleon" ]; then
     echo ""
     echo "  Server VM:"
     echo "    cd $(pwd)"
-    echo "    python3 server.py --server_address 0.0.0.0:8080 --num_clients 10"
+    echo "    python3 server.py --server_address 10.0.0.1:8080 --num_clients 10"
     echo ""
     echo "  Client VMs (run on each of 10 VMs):"
     for CID in $(seq 0 9); do

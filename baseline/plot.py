@@ -1,4 +1,5 @@
 import csv
+import os
 import sys
 
 import matplotlib.pyplot as plt
@@ -15,8 +16,6 @@ def main():
     if not os.path.exists(csv_path):
         print(f"No results file found ({csv_path}). Run the experiment first.")
         sys.exit(1)
-
-    import os
 
     rows = load_csv(csv_path)
     rounds = [int(r["round"]) for r in rows]
