@@ -3,6 +3,8 @@ import logging
 import os
 import warnings
 
+import numpy as np
+
 os.environ["GRPC_VERBOSITY"] = "ERROR"
 warnings.filterwarnings("ignore")
 
@@ -49,8 +51,6 @@ class BaselineClient(fl.client.NumPyClient):
 
 
 def main():
-    import numpy as np
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--cid", type=int, required=True, help="Client ID (0-9)")
     parser.add_argument("--num_clients", type=int, default=10, help="Total number of clients")
