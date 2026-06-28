@@ -1,0 +1,33 @@
+=======================================================
+  BASELINE FEDERATED LEARNING EXPERIMENT
+  10 clients  |  2 rounds
+  Server listening on 127.0.0.1:8080
+=======================================================
+
+  Waiting for clients... 0/10
+  Waiting for clients... 1/10
+  Waiting for clients... 10/10
+  Round  1 — Global test accuracy: 0.9222  | 10 clients | CIDs: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  (pausing 1.5 seconds before next round...)
+    Client 2 local acc: 0.9722
+    Client 6 local acc: 0.9167
+    Client 9 local acc: 0.8333
+    Client 1 local acc: 0.9444
+    Client 3 local acc: 0.9167
+    Client 8 local acc: 0.9444
+    Client 4 local acc: 0.9167
+    Client 5 local acc: 0.9167
+    Client 7 local acc: 0.8889
+    Client 0 local acc: 0.8333
+  Round  2 — Global test accuracy: 0.9306  | 10 clients | CIDs: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  (pausing 1.5 seconds before next round...)
+    Client 1 local acc: 0.9444
+    Client 8 local acc: 0.9722
+    Client 6 local acc: 0.8889
+    Client 7 local acc: 0.9167
+    Client 9 local acc: 0.8333
+    Client 5 local acc: 0.9722
+    Client 4 local acc: 0.8611
+    Client 0 local acc: 0.8611
+    Client 2 local acc: 0.9722
+    Client 3 local acc: 0.9722
