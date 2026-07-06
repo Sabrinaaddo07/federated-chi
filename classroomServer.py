@@ -63,6 +63,40 @@ PRETRAIN_COUNT = 500  # samples per class
 
 # ─── Data utilities ───────────────────────────────────────────────────────────
 
+def prepare_student_data() -> None:
+    """Build per-student merged .npy files (raw pixel values + labels).
+    
+    Student A: indices 0-199 per class → student_A_data.npy  (shape 2000 x 785)
+    Student B: indices 200-399 per class → student_B_data.npy
+    
+    The last column is the integer class label.  Pixel values are raw 0-255
+    (not yet scaled) so the student notebook can mirror the MNIST pattern:
+        X = X / 255.0
+    """
+    student_slices = {"A": 0, "B": 200}
+    samples = 200
+
+    print("\n── Preparing Student Datasets " + "─" * 38)
+
+    for student_id, start in student_slices.items():
+        X_list, y_list = [], []
+        for i, cls in enumerate(CLASSES):
+            path = download_class(cls)
+            raw = np.load(path, mmap_mode="r")
+            chunk = raw[start: start + samples].copy()
+            X_list.append(chunk)
+            y_list.append(np.full(samples, i, dtype=np.int64))
+
+        X = np.vstack(X_list).astype(np.float32)
+        y = np.concatenate(y_list)
+        data = np.column_stack([X, y])
+        path_out = f"student_{student_id}_data.npy"
+        np.save(path_out, data, allow_pickle=False)
+        print(f"  ✓ Saved '{path_out}' — shape {data.shape}")
+
+    print("  (raw 0-255 pixel values, last column = label)\n")
+
+
 def download_class(cls: str) -> str:
     """Download one Quick Draw .npy file if not already present."""
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -233,6 +267,11 @@ def main() -> None:
         formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(
+        "--prepare-data",
+        action="store_true",
+        help="Download Quick Draw data and build per-student merged .npy files.",
+    )
+    parser.add_argument(
         "--pretrain",
         action="store_true",
         help="Download Quick Draw data and pre-train the global model.",
@@ -270,7 +309,9 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.pretrain:
+    if args.prepare_data:
+        prepare_student_data()
+    elif args.pretrain:
         pretrain_global_model()
     else:
         run_server(
