@@ -51,11 +51,11 @@ class BaselineFedAvg(Strategy):
         return self.initial_parameters
 
     def configure_fit(self, server_round, parameters, client_manager):
-        k = self.clients_per_round
-        while client_manager.num_available() < k:
+        while client_manager.num_available() < self.num_clients:
             time.sleep(2)
             num_avail = client_manager.num_available()
-            print(f"  Waiting for clients... {num_avail}/{k}")
+            print(f"  Waiting for clients... {num_avail}/{self.num_clients}")
+        k = min(self.clients_per_round, client_manager.num_available())
         clients = client_manager.sample(num_clients=k, min_num_clients=k)
         return [(client, FitIns(parameters, {})) for client in clients]
 
