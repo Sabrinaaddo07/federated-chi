@@ -5,6 +5,7 @@ import sys
 import matplotlib.pyplot as plt
 
 
+TARGET = 0.90
 M_VALUES = [1, 2, 4, 6, 8, 10]
 COLORS = ["#8e44ad", "#e74c3c", "#e67e22", "#f1c40f", "#27ae60", "#2e86ab"]
 MARKERS = ["x", "s", "^", "D", "v", "o"]
@@ -31,6 +32,17 @@ def main():
         data[m] = {"rounds": rounds, "accs": accs,
                    "overhead_mb": overhead_mb, "elapsed": elapsed}
 
+    crossings = {}
+    for m in M_VALUES:
+        d = data[m]
+        idx = next((i for i, a in enumerate(d["accs"]) if a >= TARGET), None)
+        if idx is not None:
+            crossings[m] = {
+                "round": d["rounds"][idx],
+                "overhead_mb": d["overhead_mb"][idx],
+                "elapsed": d["elapsed"][idx],
+            }
+
     fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 5.5))
 
     for i, m in enumerate(M_VALUES):
@@ -44,25 +56,37 @@ def main():
                  linewidth=1.5, markersize=3, label=label)
         ax3.plot(d["elapsed"], d["accs"], color=c, marker=mk,
                  linewidth=1.5, markersize=3, label=label)
+        if m in crossings:
+            cpt = crossings[m]
+            ax1.plot(cpt["round"], TARGET, color=COLORS[i], marker="D",
+                     markersize=8, zorder=5)
+            ax2.plot(cpt["overhead_mb"], TARGET, color=COLORS[i], marker="D",
+                     markersize=8, zorder=5)
+            ax3.plot(cpt["elapsed"], TARGET, color=COLORS[i], marker="D",
+                     markersize=8, zorder=5)
+
+    for ax in [ax1, ax2, ax3]:
+        ax.axhline(y=TARGET, color="gray", linestyle="--", linewidth=1,
+                   label=f"Target {TARGET*100:.0f}%")
 
     ax1.set_xlabel("Communication Round", fontsize=12)
     ax1.set_ylabel("Global Test Accuracy", fontsize=12)
     ax1.set_title("Rounds vs Accuracy", fontsize=13, fontweight="bold")
-    ax1.legend(fontsize=9, loc="lower right")
+    ax1.legend(fontsize=8, loc="lower right")
     ax1.grid(True, alpha=0.3)
     ax1.set_ylim(0, 1)
 
     ax2.set_xlabel("Cumulative Overhead (MB)", fontsize=12)
     ax2.set_ylabel("Global Test Accuracy", fontsize=12)
     ax2.set_title("Overhead vs Accuracy", fontsize=13, fontweight="bold")
-    ax2.legend(fontsize=9, loc="lower right")
+    ax2.legend(fontsize=8, loc="lower right")
     ax2.grid(True, alpha=0.3)
     ax2.set_ylim(0, 1)
 
     ax3.set_xlabel("Elapsed Wall-Clock Time (s)", fontsize=12)
     ax3.set_ylabel("Global Test Accuracy", fontsize=12)
     ax3.set_title("Time vs Accuracy", fontsize=13, fontweight="bold")
-    ax3.legend(fontsize=9, loc="lower right")
+    ax3.legend(fontsize=8, loc="lower right")
     ax3.grid(True, alpha=0.3)
     ax3.set_ylim(0, 1)
 
@@ -72,23 +96,20 @@ def main():
     print(f"Saved to {out}")
     plt.show()
 
-    print()
-    print("=" * 85)
-    h = f"{'M':<4}{'Final Acc':<12}{'Peak Acc':<12}{'Peak Round':<12}" \
-        f"{'Total Overhead (MB)':<20}{'Time (s)':<12}{'Rounds':<8}"
+    print(f"\n{'='*70}")
+    print(f"  Cost to reach target accuracy = {TARGET*100:.0f}%")
+    print(f"{'='*70}")
+    h = f"{'M':<6}{'Reached?':<10}{'Rounds':<10}{'Overhead (MB)':<16}{'Time (s)':<10}"
     print(h)
-    print("=" * 85)
+    print("-" * len(h))
     for m in M_VALUES:
-        d = data[m]
-        final = d["accs"][-1]
-        peak = max(d["accs"])
-        peak_r = d["rounds"][d["accs"].index(peak)]
-        total_mb = d["overhead_mb"][-1]
-        total_t = d["elapsed"][-1]
-        n_rounds = d["rounds"][-1]
-        print(f"{m:<4}{final:<12.4f}{peak:<12.4f}{peak_r:<12}"
-              f"{total_mb:<20.2f}{total_t:<12.2f}{n_rounds:<8}")
-    print("=" * 85)
+        if m in crossings:
+            c = crossings[m]
+            print(f"{m:<6}{'Yes':<10}{c['round']:<10}{c['overhead_mb']:<16.2f}{c['elapsed']:<10.1f}")
+        else:
+            d = data[m]
+            print(f"{m:<6}{'No (peak '+str(round(max(d['accs'])*100))+'%)':<10}{'—':<10}{'—':<16}{'—':<10}")
+    print(f"{'='*70}")
 
 
 if __name__ == "__main__":
