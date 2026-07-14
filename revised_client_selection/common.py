@@ -1,10 +1,51 @@
 import numpy as np
-from sklearn.datasets import load_digits
+import os
+import pickle
+import ssl
+import tarfile
+import urllib.request
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import SGDClassifier
 
 NUM_CLASSES = 10
-INPUT_DIM = 64
+INPUT_DIM = 3072
+
+ssl._create_default_https_context = ssl._create_unverified_context
+
+CIFAR10_URL = "https://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz"
+_CACHE_DIR = "/tmp/cifar10_cache"
+
+
+def _load_cifar10():
+    """Download cached CIFAR-10 once, return (X_train, y_train, X_test, y_test)."""
+    os.makedirs(_CACHE_DIR, exist_ok=True)
+    tarpath = os.path.join(_CACHE_DIR, "cifar-10-python.tar.gz")
+    extract_dir = os.path.join(_CACHE_DIR, "cifar-10-batches-py")
+
+    if not os.path.isdir(extract_dir):
+        if not os.path.exists(tarpath):
+            print("Downloading CIFAR-10 (163 MB)...")
+            urllib.request.urlretrieve(CIFAR10_URL, tarpath)
+        with tarfile.open(tarpath, "r:gz") as tar:
+            tar.extractall(path=_CACHE_DIR)
+
+    def _load_batch(path):
+        with open(path, "rb") as f:
+            d = pickle.load(f, encoding="bytes")
+        return d[b"data"], np.array(d[b"labels"], dtype=np.int64)
+
+    X_train_list, y_train_list = [], []
+    for i in range(1, 6):
+        Xb, yb = _load_batch(os.path.join(extract_dir, f"data_batch_{i}"))
+        X_train_list.append(Xb)
+        y_train_list.append(yb)
+    X_train = np.concatenate(X_train_list, axis=0).astype(np.float64) / 255.0
+    y_train = np.concatenate(y_train_list, axis=0)
+
+    X_test, y_test = _load_batch(os.path.join(extract_dir, "test_batch"))
+    X_test = X_test.astype(np.float64) / 255.0
+
+    return X_train, y_train, X_test, y_test
 
 
 def create_model():
@@ -31,22 +72,17 @@ def set_parameters(model, parameters):
 
 
 def load_server_test_data():
-    digits = load_digits()
-    X = digits.data.astype(np.float64) / 16.0
-    y = digits.target
-    _, X_test, _, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    _, _, X_test, y_test = _load_cifar10()
     return X_test, y_test
 
 
 def load_client_data_iid(cid, num_clients):
-    digits = load_digits()
-    X = digits.data.astype(np.float64) / 16.0
-    y = digits.target
+    X_train, y_train, _, _ = _load_cifar10()
 
     rng = np.random.RandomState(seed=42)
-    indices = rng.permutation(len(X))
-    X, y = X[indices], y[indices]
+    indices = rng.permutation(len(X_train))
+    X_train, y_train = X_train[indices], y_train[indices]
 
-    mask = np.arange(len(X)) % num_clients == cid
-    X_c, y_c = X[mask], y[mask]
+    mask = np.arange(len(X_train)) % num_clients == cid
+    X_c, y_c = X_train[mask], y_train[mask]
     return train_test_split(X_c, y_c, test_size=0.2, random_state=42)
