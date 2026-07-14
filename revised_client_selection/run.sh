@@ -34,6 +34,9 @@ if [ "$MODE" = "local" ]; then
     echo "========================================"
     echo ""
 
+    echo "  Checking CIFAR-10 cache..."
+    python3 -c "from common import _load_cifar10; _load_cifar10(); print('  CIFAR-10 ready')"
+
     python3 server.py --server_address "127.0.0.1:8080" --num_clients 10 \
         --num_rounds 75 --clients_per_round "$M" &
     SERVER_PID=$!
