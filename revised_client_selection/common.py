@@ -17,35 +17,58 @@ _CACHE_DIR = "/tmp/cifar10_cache"
 
 
 def _load_cifar10():
-    """Download cached CIFAR-10 once, return (X_train, y_train, X_test, y_test)."""
+    """Download cached CIFAR-10 once, return (X_train, y_train, X_test, y_test).
+    
+    If the download is corrupted, removes the bad files and retries.
+    """
     os.makedirs(_CACHE_DIR, exist_ok=True)
     tarpath = os.path.join(_CACHE_DIR, "cifar-10-python.tar.gz")
     extract_dir = os.path.join(_CACHE_DIR, "cifar-10-batches-py")
 
-    if not os.path.isdir(extract_dir):
-        if not os.path.exists(tarpath):
-            print("Downloading CIFAR-10 (163 MB)...")
-            urllib.request.urlretrieve(CIFAR10_URL, tarpath)
-        with tarfile.open(tarpath, "r:gz") as tar:
-            tar.extractall(path=_CACHE_DIR)
+    for attempt in range(2):
+        if not os.path.isdir(extract_dir):
+            if not os.path.exists(tarpath):
+                print("Downloading CIFAR-10 (163 MB)...")
+                urllib.request.urlretrieve(CIFAR10_URL, tarpath)
+            try:
+                with tarfile.open(tarpath, "r:gz") as tar:
+                    tar.extractall(path=_CACHE_DIR)
+            except (EOFError, tarfile.ReadError):
+                print("Download corrupted, retrying...")
+                os.remove(tarpath)
+                for p in os.listdir(_CACHE_DIR):
+                    fp = os.path.join(_CACHE_DIR, p)
+                    if os.path.isdir(fp):
+                        import shutil
+                        shutil.rmtree(fp)
+                continue
 
-    def _load_batch(path):
-        with open(path, "rb") as f:
-            d = pickle.load(f, encoding="bytes")
-        return d[b"data"], np.array(d[b"labels"], dtype=np.int64)
+        def _load_batch(path):
+            with open(path, "rb") as f:
+                d = pickle.load(f, encoding="bytes")
+            return d[b"data"], np.array(d[b"labels"], dtype=np.int64)
 
-    X_train_list, y_train_list = [], []
-    for i in range(1, 6):
-        Xb, yb = _load_batch(os.path.join(extract_dir, f"data_batch_{i}"))
-        X_train_list.append(Xb)
-        y_train_list.append(yb)
-    X_train = np.concatenate(X_train_list, axis=0).astype(np.float64) / 255.0
-    y_train = np.concatenate(y_train_list, axis=0)
+        try:
+            X_train_list, y_train_list = [], []
+            for i in range(1, 6):
+                Xb, yb = _load_batch(os.path.join(extract_dir, f"data_batch_{i}"))
+                X_train_list.append(Xb)
+                y_train_list.append(yb)
+            X_train = np.concatenate(X_train_list, axis=0).astype(np.float64) / 255.0
+            y_train = np.concatenate(y_train_list, axis=0)
 
-    X_test, y_test = _load_batch(os.path.join(extract_dir, "test_batch"))
-    X_test = X_test.astype(np.float64) / 255.0
-
-    return X_train, y_train, X_test, y_test
+            X_test, y_test = _load_batch(os.path.join(extract_dir, "test_batch"))
+            X_test = X_test.astype(np.float64) / 255.0
+            return X_train, y_train, X_test, y_test
+        except Exception:
+            if attempt == 0:
+                import shutil
+                shutil.rmtree(extract_dir)
+                if os.path.exists(tarpath):
+                    os.remove(tarpath)
+                print("CIFAR-10 data corrupted, retrying...")
+                continue
+            raise
 
 
 def create_model():
