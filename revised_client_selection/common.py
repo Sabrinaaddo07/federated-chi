@@ -74,6 +74,8 @@ def _load_cifar10():
 def create_model():
     return SGDClassifier(
         loss="log_loss",
+        learning_rate="constant",
+        eta0=0.001,
         warm_start=True,
         random_state=42,
     )
