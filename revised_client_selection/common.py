@@ -77,7 +77,7 @@ def create_model():
         activation="relu",
         solver="sgd",
         learning_rate="constant",
-        eta0=0.001,
+        learning_rate_init=0.001,
         warm_start=True,
         random_state=42,
     )
