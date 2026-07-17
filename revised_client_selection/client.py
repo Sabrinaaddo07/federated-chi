@@ -9,10 +9,9 @@ os.environ["GRPC_VERBOSITY"] = "ERROR"
 warnings.filterwarnings("ignore")
 
 import flwr as fl
-from sklearn.model_selection import train_test_split
 from common import (
     create_model, get_parameters, set_parameters,
-    load_full_data, NUM_CLASSES,
+    load_partitioned_data, NUM_CLASSES,
 )
 
 flwr_logger = logging.getLogger("flwr")
@@ -24,21 +23,12 @@ for h in flwr_logger.handlers:
 class BaselineClient(fl.client.NumPyClient):
     def __init__(self, cid, num_clients):
         self.cid = cid
-        self.X_full, self.y_full = load_full_data()
-        # Reserve a small fixed test set per client (1/500th, same as training sample)
-        rng = np.random.RandomState(seed=999 + cid)
-        n_test = len(self.X_full) // 500
-        idx = rng.choice(len(self.X_full), n_test, replace=False)
-        self.X_test, self.y_test = self.X_full[idx], self.y_full[idx]
-        # Remove test samples from full set to avoid data leakage
-        mask = np.ones(len(self.X_full), dtype=bool)
-        mask[idx] = False
-        self.X_full, self.y_full = self.X_full[mask], self.y_full[mask]
+        self.X_data, self.y_data = load_partitioned_data(cid, num_clients)
         self.model = create_model()
         self.all_classes = NUM_CLASSES
         self.fit_count = 0
         self.num_clients = num_clients
-        print(f"  Client {cid} — {len(self.X_full)} train pool, {len(self.X_test)} test samples")
+        print(f"  Client {cid} — {len(self.X_data)} train pool (exclusive partition)")
 
     def get_parameters(self, config):
         return get_parameters(self.model)
@@ -50,28 +40,21 @@ class BaselineClient(fl.client.NumPyClient):
         self.fit_count += 1
         self.set_parameters(parameters)
 
-        # Sample a fresh 1/500th of the data each round
-        # Paper: each client holds 1/500th of total data
-        n_sample = len(self.X_full) // 500  # = 100
+        # Sample a fresh 1/500th (=100) from this client's exclusive partition
+        n_sample = len(self.X_data) // 50  # 5000 / 50 = 100
         rng = np.random.RandomState(seed=42 + self.cid * 1000 + self.fit_count)
-        idx = rng.choice(len(self.X_full), n_sample, replace=False)
-        X_sample, y_sample = self.X_full[idx], self.y_full[idx]
-
-        # Split into train/test (80/20)
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_sample, y_sample, test_size=0.2, random_state=42,
-        )
+        idx = rng.choice(len(self.X_data), n_sample, replace=False)
+        X_sample, y_sample = self.X_data[idx], self.y_data[idx]
 
         self.model.partial_fit(
-            X_train, y_train,
+            X_sample, y_sample,
             classes=np.arange(self.all_classes),
         )
-        return self.get_parameters(config), len(X_train), {"cid": self.cid}
+        return self.get_parameters(config), len(X_sample), {"cid": self.cid}
 
     def evaluate(self, parameters, config):
         self.set_parameters(parameters)
-        acc = self.model.score(self.X_test, self.y_test)
-        return 1.0 - acc, len(self.X_test), {"accuracy": acc, "cid": self.cid}
+        return 0.0, 0, {"cid": self.cid}
 
 
 def main():

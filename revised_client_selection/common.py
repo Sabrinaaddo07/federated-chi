@@ -75,7 +75,7 @@ def create_model():
     return SGDClassifier(
         loss="log_loss",
         learning_rate="constant",
-        eta0=0.00001,
+        eta0=0.01,
         warm_start=True,
         random_state=42,
     )
@@ -107,6 +107,16 @@ def load_full_data():
     rng = np.random.RandomState(seed=42)
     idx = rng.permutation(len(X_train))
     return X_train[idx], y_train[idx]
+
+
+def load_partitioned_data(cid, num_clients):
+    """Return an exclusive 1/num_clients partition for client cid (no train/test split)."""
+    X_train, y_train, _, _ = _load_cifar10()
+    rng = np.random.RandomState(seed=42)
+    idx = rng.permutation(len(X_train))
+    X_shuf, y_shuf = X_train[idx], y_train[idx]
+    chunk = len(X_train) // num_clients
+    return X_shuf[cid * chunk:(cid + 1) * chunk], y_shuf[cid * chunk:(cid + 1) * chunk]
 
 
 def load_client_data_iid(cid, num_clients):
