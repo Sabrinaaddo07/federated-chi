@@ -5,7 +5,7 @@ import sys
 import matplotlib.pyplot as plt
 
 
-TARGET = 0.35
+TARGET = 0.33
 M_VALUES = [1, 2, 4, 6, 8, 10]
 COLORS = ["#8e44ad", "#e74c3c", "#e67e22", "#f1c40f", "#27ae60", "#2e86ab"]
 MARKERS = ["x", "s", "^", "D", "v", "o"]
