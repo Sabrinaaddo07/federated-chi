@@ -81,9 +81,9 @@ def create_model():
         warm_start=True,
         random_state=42,
     )
-    # initialize with 1 dummy sample so coefs_/intercepts_ are populated
-    dummy_X = np.random.randn(1, INPUT_DIM).astype(np.float64)
-    dummy_y = np.array([0])
+    # initialize with 1 dummy sample per class so all 10 classes are known
+    dummy_X = np.zeros((NUM_CLASSES, INPUT_DIM), dtype=np.float64)
+    dummy_y = np.arange(NUM_CLASSES)
     model.partial_fit(dummy_X, dummy_y, classes=np.arange(NUM_CLASSES))
     # zero out weights so server starts from zeros (clean slate)
     for i in range(len(model.coefs_)):
