@@ -101,6 +101,14 @@ def load_server_test_data():
     return X_test, y_test
 
 
+def load_full_data():
+    """Return full CIFAR-10 training data (50K samples) without partitioning."""
+    X_train, y_train, _, _ = _load_cifar10()
+    rng = np.random.RandomState(seed=42)
+    idx = rng.permutation(len(X_train))
+    return X_train[idx], y_train[idx]
+
+
 def load_client_data_iid(cid, num_clients):
     X_train, y_train, _, _ = _load_cifar10()
 
