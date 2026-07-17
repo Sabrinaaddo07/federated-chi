@@ -2,6 +2,7 @@ import argparse
 import csv
 import logging
 import os
+import random
 import time
 import warnings
 
@@ -27,7 +28,7 @@ for h in flwr_logger.handlers:
     h.setLevel(logging.ERROR)
 
 NUM_CLIENTS = 10
-NUM_ROUNDS = 75
+NUM_ROUNDS = 150
 
 SERVER_X_TEST, SERVER_Y_TEST = load_server_test_data()
 
@@ -141,6 +142,9 @@ def main():
     print(f"  Server listening on {args.server_address}")
     print("=" * 55)
     print()
+
+    random.seed(42)
+    np.random.seed(42)
 
     initial_model = create_model()
     initial_weights = get_parameters(initial_model)
