@@ -5,7 +5,7 @@ import ssl
 import tarfile
 import urllib.request
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import SGDClassifier
+from sklearn.neural_network import MLPClassifier
 
 NUM_CLASSES = 10
 INPUT_DIM = 3072
@@ -72,27 +72,34 @@ def _load_cifar10():
 
 
 def create_model():
-    return SGDClassifier(
-        loss="log_loss",
+    model = MLPClassifier(
+        hidden_layer_sizes=(32,),
+        activation="relu",
+        solver="sgd",
         learning_rate="constant",
         eta0=0.001,
         warm_start=True,
         random_state=42,
     )
+    # initialize with 1 dummy sample so coefs_/intercepts_ are populated
+    dummy_X = np.random.randn(1, INPUT_DIM).astype(np.float64)
+    dummy_y = np.array([0])
+    model.partial_fit(dummy_X, dummy_y, classes=np.arange(NUM_CLASSES))
+    # zero out weights so server starts from zeros (clean slate)
+    for i in range(len(model.coefs_)):
+        model.coefs_[i].fill(0)
+        model.intercepts_[i].fill(0)
+    return model
 
 
 def get_parameters(model):
-    if not hasattr(model, "coef_") or model.coef_ is None:
-        return [
-            np.zeros((NUM_CLASSES, INPUT_DIM), dtype=np.float64),
-            np.zeros(NUM_CLASSES, dtype=np.float64),
-        ]
-    return [model.coef_, model.intercept_]
+    return model.coefs_ + model.intercepts_
 
 
 def set_parameters(model, parameters):
-    model.coef_ = parameters[0]
-    model.intercept_ = parameters[1]
+    n = len(model.coefs_)
+    model.coefs_ = parameters[:n]
+    model.intercepts_ = parameters[n:]
     model.classes_ = np.arange(NUM_CLASSES)
 
 

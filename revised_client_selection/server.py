@@ -27,7 +27,7 @@ for h in flwr_logger.handlers:
     h.setLevel(logging.ERROR)
 
 NUM_CLIENTS = 10
-NUM_ROUNDS = 75
+NUM_ROUNDS = 40
 
 SERVER_X_TEST, SERVER_Y_TEST = load_server_test_data()
 
