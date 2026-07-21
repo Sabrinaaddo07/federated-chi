@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-TARGET = 0.32
+TARGET = 0.08
 M_VALUES = [1, 2, 4, 6, 8, 10]
 COLORS = ["#8e44ad", "#e74c3c", "#e67e22", "#f1c40f", "#27ae60", "#2e86ab"]
 MARKERS = ["x", "s", "^", "D", "v", "o"]
@@ -98,21 +98,21 @@ def main():
     ax1.set_title("Rounds vs Accuracy", fontsize=13, fontweight="bold")
     ax1.legend(fontsize=8, loc="lower right")
     ax1.grid(True, alpha=0.3)
-    ax1.set_ylim(0, 0.55)
+    ax1.set_ylim(0, 0.20)
 
     ax2.set_xlabel("Cumulative Overhead (MB)", fontsize=12)
     ax2.set_ylabel("Global Test Accuracy", fontsize=12)
     ax2.set_title("Overhead vs Accuracy", fontsize=13, fontweight="bold")
     ax2.legend(fontsize=8, loc="lower right")
     ax2.grid(True, alpha=0.3)
-    ax2.set_ylim(0, 0.55)
+    ax2.set_ylim(0, 0.20)
 
     ax3.set_xlabel("Elapsed Wall-Clock Time (s)", fontsize=12)
     ax3.set_ylabel("Global Test Accuracy", fontsize=12)
     ax3.set_title("Time vs Accuracy", fontsize=13, fontweight="bold")
     ax3.legend(fontsize=8, loc="lower right")
     ax3.grid(True, alpha=0.3)
-    ax3.set_ylim(0, 0.55)
+    ax3.set_ylim(0, 0.20)
 
     plt.tight_layout()
     out = os.path.join(csv_dir, "revised_client_selection_comparison.png")
