@@ -114,6 +114,18 @@ def get_initial_parameters(dataset):
     ]
 
 
+def train_centralized_baseline(dataset):
+    X_train, y_train, X_test, y_test = load_dataset(dataset)
+    info = DATASET_INFO[dataset]
+    model = SGDClassifier(
+        loss="log_loss", learning_rate="constant", eta0=0.01,
+        warm_start=False, random_state=42,
+    )
+    model.fit(X_train, y_train)
+    acc = model.score(X_test, y_test)
+    return acc, model
+
+
 def get_parameters(model):
     if not hasattr(model, "coef_") or model.coef_ is None:
         return None

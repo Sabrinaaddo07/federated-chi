@@ -24,14 +24,13 @@ class HDCilent(fl.client.NumPyClient):
     def __init__(self, cid, dataset, alpha, num_clients, seed):
         self.cid = cid
         self.dataset = dataset
-        X_train, y_train, X_test, y_test = load_dataset(dataset)
+        X_train, y_train, _, _ = load_dataset(dataset)
         partitions = dirichlet_partition(alpha, num_clients, X_train, y_train, seed=seed)
         self.X_train, self.y_train = partitions[cid]
-        self.X_test, self.y_test = X_test, y_test
         self.model = create_model(dataset)
         self.fit_count = 0
         self.all_classes = DATASET_INFO[dataset]['num_classes']
-        print(f"  Client {cid} — {len(self.X_train)} train samples, {len(self.y_train)}")
+        print(f"  Client {cid} — {len(self.X_train)} train samples")
 
     def get_parameters(self, config):
         return get_parameters(self.model)
@@ -48,13 +47,6 @@ class HDCilent(fl.client.NumPyClient):
                 self.X_train, self.y_train, classes=np.arange(self.all_classes),
             )
         return self.get_parameters(config), max(len(self.X_train), 1), {"cid": self.cid}
-
-    def evaluate(self, parameters, config):
-        self.set_parameters(parameters)
-        if len(self.X_test) > 0:
-            acc = self.model.score(self.X_test, self.y_test)
-            return 1.0 - acc, len(self.X_test), {"accuracy": acc, "cid": self.cid}
-        return 0.0, 0, {"cid": self.cid}
 
 
 def main():

@@ -4,7 +4,6 @@ import logging
 import os
 import random
 import signal
-import sys
 import time
 import warnings
 
@@ -14,12 +13,13 @@ warnings.filterwarnings("ignore")
 import numpy as np
 import flwr as fl
 from flwr.server.strategy import Strategy
-from flwr.common import FitIns, EvaluateIns, FitRes, EvaluateRes, Parameters
+from flwr.common import FitIns, Parameters
 from flwr.common import parameters_to_ndarrays, ndarrays_to_parameters
 from sklearn.metrics import accuracy_score
 from common import (
     create_model, get_parameters, set_parameters,
     get_initial_parameters, load_dataset, DATASET_INFO,
+    train_centralized_baseline,
 )
 
 flwr_logger = logging.getLogger("flwr")
@@ -39,14 +39,15 @@ class HDExperimentStrategy(Strategy):
         self.seed = seed
         self.num_clients = num_clients
         self.model = None
-        self.csv_file = None
-        self.csv_writer = None
+        self.rounds_file = None
+        self.rounds_writer = None
+        self._summary_written = False
         self.model_bytes = sum(p.nbytes for p in parameters_to_ndarrays(initial_parameters))
         self.cumulative_overhead = 0
         self.start_time = time.time()
         self.best_acc = 0.0
         self.no_improve = 0
-        self._finalized = False
+        self.times_to_target = None
 
         _, _, X_test, y_test = load_dataset(dataset)
         self.server_X_test = X_test
@@ -82,8 +83,11 @@ class HDExperimentStrategy(Strategy):
         global_acc = accuracy_score(self.server_y_test, y_pred)
 
         elapsed = time.time() - self.start_time
-        per_round = self.model_bytes * 2 * len(results)
-        self.cumulative_overhead += per_round
+
+        sent_bytes = self.model_bytes * len(results)
+        received_bytes = self.model_bytes * len(results)
+        round_overhead = sent_bytes + received_bytes
+        self.cumulative_overhead += round_overhead
 
         if global_acc > self.best_acc:
             self.best_acc = global_acc
@@ -91,12 +95,17 @@ class HDExperimentStrategy(Strategy):
         else:
             self.no_improve += 1
 
-        self._write_row(server_round, global_acc, elapsed)
-        print(f"  {server_round:3d}/{NUM_ROUNDS} — acc={global_acc:.4f} best={self.best_acc:.4f} "
-              f"| {elapsed:.0f}s | {self.cumulative_overhead/1e6:.1f}MB")
+        target = 0.9 * self.best_acc
+        if self.times_to_target is None and global_acc >= target:
+            self.times_to_target = elapsed
+
+        self._write_round_row(server_round, global_acc, sent_bytes, received_bytes, elapsed)
+        print(f"  {server_round:3d}/{NUM_ROUNDS}  acc={global_acc:.4f} best={self.best_acc:.4f}  "
+              f"{elapsed:.0f}s  sent={sent_bytes/1e6:.1f}MB recv={received_bytes/1e6:.1f}MB  "
+              f"total={self.cumulative_overhead/1e6:.1f}MB")
 
         if self.no_improve >= PATIENCE and server_round >= 30:
-            self._finalize(elapsed)
+            self._write_summary(elapsed)
             os.kill(os.getpid(), signal.SIGINT)
 
         time.sleep(0.1)
@@ -111,57 +120,80 @@ class HDExperimentStrategy(Strategy):
     def evaluate(self, server_round, parameters):
         return None
 
-    def _write_row(self, rnd, acc, elapsed):
-        if self.csv_writer is None:
-            fname = f"results_{self.dataset}_hd{self.hd_val}_seed{self.seed}.csv"
-            self.csv_file = open(fname, "w", newline="")
-            self.csv_writer = csv.writer(self.csv_file)
-            self.csv_writer.writerow([
-                "round", "global_accuracy", "cumulative_overhead_bytes",
-                "elapsed_time_seconds", "best_accuracy_so_far",
+    def _write_round_row(self, rnd, acc, sent_bytes, received_bytes, elapsed):
+        if self.rounds_writer is None:
+            fname = f"results_{self.dataset}_hd{self.hd_val}_seed{self.seed}_rounds.csv"
+            self.rounds_file = open(fname, "w", newline="")
+            self.rounds_writer = csv.writer(self.rounds_file)
+            self.rounds_writer.writerow([
+                "round", "global_accuracy", "sent_bytes", "received_bytes",
+                "cumulative_overhead_bytes", "elapsed_time_seconds",
             ])
-        self.csv_writer.writerow([
-            rnd, f"{acc:.4f}", self.cumulative_overhead,
-            f"{elapsed:.2f}", f"{self.best_acc:.4f}",
+        self.rounds_writer.writerow([
+            rnd, f"{acc:.4f}", sent_bytes, received_bytes,
+            self.cumulative_overhead, f"{elapsed:.2f}",
         ])
-        self.csv_file.flush()
+        self.rounds_file.flush()
 
-    def _finalize(self, elapsed):
-        if self._finalized:
+    def _count_rounds(self):
+        fname = f"results_{self.dataset}_hd{self.hd_val}_seed{self.seed}_rounds.csv"
+        if not os.path.exists(fname):
+            return 0
+        with open(fname) as f:
+            return sum(1 for _ in f) - 1
+
+    def _write_summary(self, elapsed):
+        if self._summary_written:
             return
-        self._finalized = True
+        self._summary_written = True
+
+        if self.rounds_file:
+            self.rounds_file.close()
+
         target = 0.9 * self.best_acc
-        # Re-read CSV to find first round meeting target
-        if self.csv_file:
-            self.csv_file.close()
-        fname = f"results_{self.dataset}_hd{self.hd_val}_seed{self.seed}.csv"
-        rows = []
+        fname = f"results_{self.dataset}_hd{self.hd_val}_seed{self.seed}_rounds.csv"
+        rounds_to_target = None
         with open(fname, newline="") as f:
             reader = csv.DictReader(f)
             for r in reader:
-                rows.append(r)
-        rounds_to_target = None
-        for r in rows:
-            if float(r["global_accuracy"]) >= target:
-                rounds_to_target = int(r["round"])
-                break
-        # Overwrite with final summary
-        with open(fname, "w", newline="") as f:
+                if float(r["global_accuracy"]) >= target:
+                    rounds_to_target = int(r["round"])
+                    break
+
+        final_round = self._count_rounds()
+        fname_summary = f"results_{self.dataset}_hd{self.hd_val}_seed{self.seed}.csv"
+        with open(fname_summary, "w", newline="") as f:
             w = csv.writer(f)
             w.writerow([
                 "dataset", "hd", "seed", "max_accuracy", "target_accuracy",
-                "rounds_to_target", "final_round", "cumulative_overhead_bytes",
-                "elapsed_time_seconds",
+                "rounds_to_target", "time_to_target_seconds",
+                "final_round", "cumulative_overhead_bytes", "elapsed_time_seconds",
             ])
+            ttt = f"{self.times_to_target:.2f}" if self.times_to_target is not None else "NA"
             w.writerow([
                 self.dataset, self.hd_val, self.seed,
                 f"{self.best_acc:.4f}", f"{target:.4f}",
                 rounds_to_target if rounds_to_target else "NA",
-                len(rows), self.cumulative_overhead, f"{elapsed:.2f}",
+                ttt,
+                final_round, self.cumulative_overhead, f"{elapsed:.2f}",
             ])
+
         print(f"\n  >>> {self.dataset} HD={self.hd_val} seed={self.seed}: "
               f"max={self.best_acc:.4f} target={target:.4f} "
-              f"rounds_to_target={rounds_to_target}")
+              f"rounds_to_target={rounds_to_target} "
+              f"time_to_target={self.times_to_target:.1f}s")
+
+        self._write_centralized_accuracy()
+
+    def _write_centralized_accuracy(self):
+        try:
+            cl_acc, _ = train_centralized_baseline(self.dataset)
+            fname = f"results_{self.dataset}_hd{self.hd_val}_seed{self.seed}.csv"
+            with open(fname, "a", newline="") as f:
+                w = csv.writer(f)
+                w.writerow([f"centralized_baseline_accuracy", f"{cl_acc:.4f}"])
+        except Exception as e:
+            print(f"  Could not compute centralized baseline: {e}")
 
 
 def main():
@@ -200,7 +232,7 @@ def main():
     except KeyboardInterrupt:
         pass
 
-    strategy._finalize(time.time() - strategy.start_time)
+    strategy._write_summary(time.time() - strategy.start_time)
 
 
 if __name__ == "__main__":
