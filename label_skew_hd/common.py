@@ -76,7 +76,7 @@ def _load_cifar100():
 def _load_mnist():
     from sklearn.datasets import fetch_openml
     print("Loading MNIST...")
-    X, y = fetch_openml('mnist_784', version=1, return_X_y=True, as_frame=False)
+    X, y = fetch_openml('mnist_784', version=1, return_X_y=True, as_frame=False, parser='liac-arff')
     X = np.asarray(X, dtype=np.float64) / 255.0
     y = np.asarray(y, dtype=np.int64)
     return X[:60000], y[:60000], X[60000:], y[60000:]
