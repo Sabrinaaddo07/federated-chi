@@ -42,10 +42,10 @@ def _load_cifar10():
         Xb, yb = _load(os.path.join(extract_dir, f"data_batch_{i}"))
         X_list.append(Xb)
         y_list.append(yb)
-    X_train = np.concatenate(X_list, axis=0).astype(np.float64) / 255.0
+    X_train = np.concatenate(X_list, axis=0).astype(np.float32) / 255.0
     y_train = np.concatenate(y_list, axis=0)
     X_test, y_test = _load(os.path.join(extract_dir, "test_batch"))
-    X_test = X_test.astype(np.float64) / 255.0
+    X_test = X_test.astype(np.float32) / 255.0
     return X_train, y_train, X_test, y_test
 
 
@@ -67,9 +67,9 @@ def _load_cifar100():
             d = pickle.load(f, encoding="bytes")
         return d[b"data"], np.array(d[b"fine_labels"], dtype=np.int64)
     X_train, y_train = _load(os.path.join(extract_dir, "train"))
-    X_train = X_train.astype(np.float64) / 255.0
+    X_train = X_train.astype(np.float32) / 255.0
     X_test, y_test = _load(os.path.join(extract_dir, "test"))
-    X_test = X_test.astype(np.float64) / 255.0
+    X_test = X_test.astype(np.float32) / 255.0
     return X_train, y_train, X_test, y_test
 
 
@@ -77,7 +77,7 @@ def _load_mnist():
     from sklearn.datasets import fetch_openml
     print("Loading MNIST...")
     X, y = fetch_openml('mnist_784', version=1, return_X_y=True, as_frame=False, parser='liac-arff')
-    X = np.asarray(X, dtype=np.float64) / 255.0
+    X = np.asarray(X, dtype=np.float32) / 255.0
     y = np.asarray(y, dtype=np.int64)
     return X[:60000], y[:60000], X[60000:], y[60000:]
 
@@ -138,7 +138,7 @@ def set_parameters(model, parameters):
     model.classes_ = np.arange(parameters[0].shape[0])
 
 
-def dirichlet_partition(alpha, num_clients, X, y, seed=42):
+def dirichlet_partition(alpha, num_clients, X, y, seed=42, client_idx=None):
     rng = np.random.RandomState(seed)
     num_classes = len(np.unique(y))
 
@@ -149,7 +149,8 @@ def dirichlet_partition(alpha, num_clients, X, y, seed=42):
 
     client_indices = [[] for _ in range(num_clients)]
     for c in range(num_classes):
-        sizes = (proportions[:, c] * class_counts[c]).astype(int)
+        col_sum = proportions[:, c].sum()
+        sizes = (proportions[:, c] / col_sum * class_counts[c]).astype(int)
         diff = class_counts[c] - sizes.sum()
         sizes[-1] += diff
         sizes = np.maximum(sizes, 0)
@@ -162,15 +163,18 @@ def dirichlet_partition(alpha, num_clients, X, y, seed=42):
                 client_indices[i].append(idx[start:start + sizes[i]])
                 start += sizes[i]
 
-    result = []
-    for i in range(num_clients):
-        if client_indices[i]:
-            idx = np.concatenate(client_indices[i])
-            result.append((X[idx], y[idx]))
-        else:
-            result.append((np.array([], dtype=np.int64), np.array([], dtype=np.int64)))
+    if client_idx is None:
+        result = []
+        for i in range(num_clients):
+            if client_indices[i]:
+                idx = np.concatenate(client_indices[i])
+                result.append((X[idx], y[idx]))
+            else:
+                result.append((np.array([], dtype=np.int64), np.array([], dtype=np.int64)))
+        return result
 
-    return result
+    idx = np.concatenate(client_indices[client_idx])
+    return X[idx], y[idx]
 
 
 def compute_hellinger_distance(client_data_list, num_classes):

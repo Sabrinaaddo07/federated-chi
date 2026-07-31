@@ -25,8 +25,9 @@ class HDCilent(fl.client.NumPyClient):
         self.cid = cid
         self.dataset = dataset
         X_train, y_train, _, _ = load_dataset(dataset)
-        partitions = dirichlet_partition(alpha, num_clients, X_train, y_train, seed=seed)
-        self.X_train, self.y_train = partitions[cid]
+        self.X_train, self.y_train = dirichlet_partition(
+            alpha, num_clients, X_train, y_train, seed=seed, client_idx=self.cid,
+        )
         self.model = create_model(dataset)
         self.fit_count = 0
         self.all_classes = DATASET_INFO[dataset]['num_classes']
