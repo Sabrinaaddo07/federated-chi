@@ -59,6 +59,8 @@ class HDExperimentStrategy(Strategy):
     def configure_fit(self, server_round, parameters, client_manager):
         while client_manager.num_available() < self.num_clients:
             time.sleep(2)
+            num_avail = client_manager.num_available()
+            print(f"  Waiting for clients... {num_avail}/{self.num_clients}", flush=True)
         clients = client_manager.sample(
             num_clients=self.num_clients, min_num_clients=self.num_clients
         )
