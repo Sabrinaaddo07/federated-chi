@@ -42,10 +42,10 @@ def _load_cifar10():
         Xb, yb = _load(os.path.join(extract_dir, f"data_batch_{i}"))
         X_list.append(Xb)
         y_list.append(yb)
-    X_train = np.concatenate(X_list, axis=0).astype(np.float32) / 255.0
+    X_train = np.concatenate(X_list, axis=0).astype(np.float64) / 255.0
     y_train = np.concatenate(y_list, axis=0)
     X_test, y_test = _load(os.path.join(extract_dir, "test_batch"))
-    X_test = X_test.astype(np.float32) / 255.0
+    X_test = X_test.astype(np.float64) / 255.0
     return X_train, y_train, X_test, y_test
 
 
@@ -67,9 +67,9 @@ def _load_cifar100():
             d = pickle.load(f, encoding="bytes")
         return d[b"data"], np.array(d[b"fine_labels"], dtype=np.int64)
     X_train, y_train = _load(os.path.join(extract_dir, "train"))
-    X_train = X_train.astype(np.float32) / 255.0
+    X_train = X_train.astype(np.float64) / 255.0
     X_test, y_test = _load(os.path.join(extract_dir, "test"))
-    X_test = X_test.astype(np.float32) / 255.0
+    X_test = X_test.astype(np.float64) / 255.0
     return X_train, y_train, X_test, y_test
 
 
@@ -77,7 +77,7 @@ def _load_mnist():
     from sklearn.datasets import fetch_openml
     print("Loading MNIST...")
     X, y = fetch_openml('mnist_784', version=1, return_X_y=True, as_frame=False, parser='liac-arff')
-    X = np.asarray(X, dtype=np.float32) / 255.0
+    X = np.asarray(X, dtype=np.float64) / 255.0
     y = np.asarray(y, dtype=np.int64)
     return X[:60000], y[:60000], X[60000:], y[60000:]
 
