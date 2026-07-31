@@ -114,7 +114,7 @@ def get_initial_parameters(dataset):
     ]
 
 
-def train_centralized_baseline(dataset, max_passes=150, patience=20):
+def train_centralized_baseline(dataset, max_passes=300, patience=60):
     X_train, y_train, X_test, y_test = load_dataset(dataset)
     info = DATASET_INFO[dataset]
     num_classes = info['num_classes']
@@ -122,7 +122,7 @@ def train_centralized_baseline(dataset, max_passes=150, patience=20):
     best_acc = 0.0
     best_model = None
     no_improve = 0
-    for _ in range(max_passes):
+    for i in range(max_passes):
         model.partial_fit(X_train, y_train, classes=np.arange(num_classes))
         acc = model.score(X_test, y_test)
         if acc > best_acc:
@@ -133,6 +133,8 @@ def train_centralized_baseline(dataset, max_passes=150, patience=20):
             no_improve += 1
             if no_improve >= patience:
                 break
+        if (i + 1) % 10 == 0 or acc > best_acc:
+            print(f"  pass {i + 1}: test_acc={acc:.4f} best={best_acc:.4f}", flush=True)
     if best_model is not None:
         set_parameters(model, pickle.loads(best_model))
     return best_acc, model
