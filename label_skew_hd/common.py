@@ -114,16 +114,28 @@ def get_initial_parameters(dataset):
     ]
 
 
-def train_centralized_baseline(dataset):
+def train_centralized_baseline(dataset, max_passes=150, patience=20):
     X_train, y_train, X_test, y_test = load_dataset(dataset)
     info = DATASET_INFO[dataset]
-    model = SGDClassifier(
-        loss="log_loss", learning_rate="constant", eta0=0.01,
-        warm_start=False, random_state=42,
-    )
-    model.fit(X_train, y_train)
-    acc = model.score(X_test, y_test)
-    return acc, model
+    num_classes = info['num_classes']
+    model = create_model(dataset)
+    best_acc = 0.0
+    best_model = None
+    no_improve = 0
+    for _ in range(max_passes):
+        model.partial_fit(X_train, y_train, classes=np.arange(num_classes))
+        acc = model.score(X_test, y_test)
+        if acc > best_acc:
+            best_acc = acc
+            best_model = pickle.dumps(get_parameters(model))
+            no_improve = 0
+        else:
+            no_improve += 1
+            if no_improve >= patience:
+                break
+    if best_model is not None:
+        set_parameters(model, pickle.loads(best_model))
+    return best_acc, model
 
 
 def get_parameters(model):
