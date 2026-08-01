@@ -119,8 +119,7 @@ def train_centralized_baseline(dataset, max_passes=500):
     info = DATASET_INFO[dataset]
     model = SGDClassifier(
         loss="log_loss", learning_rate="optimal", eta0=0.01,
-        max_iter=max_passes, early_stopping=True, validation_fraction=0.1,
-        n_iter_no_change=10, tol=1e-4, random_state=42,
+        max_iter=max_passes, early_stopping=False, tol=None, random_state=42,
     )
     model.fit(X_train, y_train)
     acc = model.score(X_test, y_test)
