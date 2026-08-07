@@ -21,7 +21,7 @@ Typical workflow
   python server.py --min-clients 2 --rounds 3
 
   # Optional flags
-  --address  0.0.0.0:8080    Flower gRPC address  (default: 0.0.0.0:8080)
+  --address  0.0.0.0:8090    Flower gRPC address  (default: 0.0.0.0:8090)
   --http-port 8081            File server port     (default: 8081)
 """
 
@@ -295,9 +295,9 @@ def main() -> None:
     parser.add_argument(
         "--address",
         type=str,
-        default="0.0.0.0:8080",
+        default="0.0.0.0:8090",
         metavar="HOST:PORT",
-        help="Flower gRPC bind address (default: 0.0.0.0:8080).",
+        help="Flower gRPC bind address (default: 0.0.0.0:8090).",
     )
     parser.add_argument(
         "--http-port",
